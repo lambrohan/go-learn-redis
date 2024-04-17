@@ -34,19 +34,21 @@ func main() {
 func handleConnection(conn net.Conn) {
 	defer conn.Close()
 
-	buf := make([]byte, 1024)
+	for {
+		buf := make([]byte, 1024)
 
-	_, err := conn.Read(buf)
-	if err != nil {
-		fmt.Println("Failed to read data")
-		return
-	}
+		_, err := conn.Read(buf)
+		if err != nil {
+			fmt.Println("Failed to read data")
+			return
+		}
 
-	_, err = conn.Write([]byte("+PONG\r\n"))
+		_, err = conn.Write([]byte("+PONG\r\n"))
 
-	if err != nil {
-		fmt.Println("Failed to write data")
-		return
+		if err != nil {
+			fmt.Println("Failed to write data")
+			return
+		}
 	}
 
 }
