@@ -2,9 +2,19 @@ package main
 
 import (
 	"fmt"
+	"strings"
+
 	// Uncomment this block to pass the first stage
 	"net"
 	"os"
+)
+
+// command map
+type Command string
+
+const (
+	PING Command = "PING"
+	ECHO Command = "ECHO"
 )
 
 func main() {
@@ -38,12 +48,41 @@ func handleConnection(conn net.Conn) {
 		buf := make([]byte, 1024)
 
 		_, err := conn.Read(buf)
+
 		if err != nil {
 			fmt.Println("Failed to read data")
 			return
 		}
 
-		_, err = conn.Write([]byte("+PONG\r\n"))
+		fmt.Print(string(buf))
+
+		requestLines := strings.Split(string(buf), "\r\n")
+
+		if len(requestLines) < 3 {
+			fmt.Println("Invalid request")
+			return
+		}
+
+		command := Command(strings.ToUpper(strings.Trim(requestLines[2], "$")))
+
+		var response string
+
+		switch command {
+		case PING:
+			response = "+PONG\r\n"
+		case ECHO:
+			if len(requestLines) < 5 {
+				fmt.Println("Invalid request")
+				return
+			}
+			message := requestLines[4]
+			response = "$" + fmt.Sprint(len(message)) + "\r\n" + message + "\r\n"
+
+		default:
+			response = "-ERR unknown command\r\n"
+		}
+
+		_, err = conn.Write([]byte(response))
 
 		if err != nil {
 			fmt.Println("Failed to write data")
