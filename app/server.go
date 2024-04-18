@@ -139,6 +139,9 @@ func handleConnection(conn net.Conn) {
 }
 
 func formatResponse(response string) string {
+	if response == "" {
+		return "$-1\r\n"
+	}
 	return fmt.Sprintf("$%d\r\n%s\r\n", len(response), response)
 }
 
