@@ -97,10 +97,9 @@ func handleConnection(conn net.Conn) {
 			} else {
 				var ttl int64 = -1
 
-				if len(command.Args) == 4 && strings.ToUpper(command.Args[2]) == "EX" {
+				if len(command.Args) == 4 && strings.ToUpper(command.Args[2]) == "PX" {
 					exMillis, _ := strconv.Atoi(command.Args[3])
 					ttl = time.Now().UnixMilli() + int64(exMillis)
-
 				}
 
 				db[command.Args[0]] = RedisData{
@@ -117,6 +116,7 @@ func handleConnection(conn net.Conn) {
 			} else {
 				entry, ok := db[command.Args[0]]
 				if ok && (entry.Ttl == -1 || entry.Ttl > time.Now().UnixMilli()) {
+					fmt.Println(entry.Ttl, time.Now().UnixMilli(), "+++++++++++")
 					response = formatResponse(entry.Value)
 				} else {
 					response = "$-1\r\n"
