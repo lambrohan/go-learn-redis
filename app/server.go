@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	"strconv"
 	"strings"
 
 	// Uncomment this block to pass the first stage
@@ -10,12 +11,21 @@ import (
 )
 
 // command map
-type Command string
+type Command struct {
+	Name CommandType
+	Args []string
+}
+type CommandType string
 
 const (
-	PING Command = "PING"
-	ECHO Command = "ECHO"
+	INFO CommandType = "INFO"
+	PING CommandType = "PING"
+	ECHO CommandType = "ECHO"
+	SET  CommandType = "SET"
+	GET  CommandType = "GET"
 )
+
+var redisData = make(map[string]string)
 
 func main() {
 	// You can use print statements as follows for debugging, they'll be visible when running tests.
@@ -49,37 +59,48 @@ func handleConnection(conn net.Conn) {
 
 		_, err := conn.Read(buf)
 
+		command, err := parseBuffer(buf)
+
 		if err != nil {
 			fmt.Println("Failed to read data")
 			return
 		}
 
-		fmt.Print(string(buf))
-
-		requestLines := strings.Split(string(buf), "\r\n")
-
-		if len(requestLines) < 3 {
-			fmt.Println("Invalid request")
-			return
-		}
-
-		command := Command(strings.ToUpper(strings.Trim(requestLines[2], "$")))
-
 		var response string
 
-		switch command {
+		switch command.Name {
+		case INFO:
+			response = "+OK\r\n"
 		case PING:
 			response = "+PONG\r\n"
 		case ECHO:
-			if len(requestLines) < 5 {
-				fmt.Println("Invalid request")
-				return
+			if len(command.Args) == 0 {
+				response = "-ERR wrong number of arguments for 'echo' command\r\n"
+			} else {
+				response = formatResponse(command.Args[0])
 			}
-			message := requestLines[4]
-			response = "$" + fmt.Sprint(len(message)) + "\r\n" + message + "\r\n"
+		case SET:
+			if len(command.Args) != 2 {
+				response = "-ERR wrong number of arguments for 'set' command\r\n"
+			} else {
+				redisData[command.Args[0]] = command.Args[1]
+				response = "+OK\r\n"
+			}
+		case GET:
+			if len(command.Args) != 1 {
+				response = "-ERR wrong number of arguments for 'get' command\r\n"
+			} else {
+				value, ok := redisData[command.Args[0]]
+				if ok {
+					response = formatResponse(value)
+				} else {
+					response = "$-1\r\n"
+				}
+
+			}
 
 		default:
-			response = "-ERR unknown command\r\n"
+			// response = "-ERR unknown command\r\n"
 		}
 
 		_, err = conn.Write([]byte(response))
@@ -90,4 +111,36 @@ func handleConnection(conn net.Conn) {
 		}
 	}
 
+}
+
+func formatResponse(response string) string {
+	return fmt.Sprintf("$%d\r\n%s\r\n", len(response), response)
+}
+
+func parseBuffer(buf []byte) (Command, error) {
+	requestLines := strings.Split(string(buf), "\r\n")
+
+	if len(requestLines) < 3 {
+		return Command{}, fmt.Errorf("Invalid request")
+	}
+
+	numArgs, err := strconv.Atoi(requestLines[0][1:])
+	if err != nil {
+		return Command{}, fmt.Errorf("Invalid request")
+	}
+
+	if len(requestLines) < numArgs*2+1 {
+		return Command{}, fmt.Errorf("Invalid request")
+	}
+
+	command := Command{
+		Name: CommandType(strings.ToUpper(requestLines[2])),
+		Args: make([]string, numArgs-1),
+	}
+
+	for i := 0; i < numArgs-1; i++ {
+		command.Args[i] = requestLines[i*2+4]
+	}
+
+	return command, nil
 }
