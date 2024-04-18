@@ -8,6 +8,7 @@ import (
 	// Uncomment this block to pass the first stage
 	"net"
 	"os"
+	"time"
 )
 
 // command map
@@ -25,7 +26,13 @@ const (
 	GET  CommandType = "GET"
 )
 
-var redisData = make(map[string]string)
+type RedisData struct {
+	Key   string
+	Value string
+	Ttl   int64
+}
+
+var db = make(map[string]RedisData)
 
 func main() {
 	// You can use print statements as follows for debugging, they'll be visible when running tests.
@@ -57,7 +64,12 @@ func handleConnection(conn net.Conn) {
 	for {
 		buf := make([]byte, 1024)
 
-		_, err := conn.Read(buf)
+		_, er := conn.Read(buf)
+
+		if er != nil {
+			fmt.Println("Failed to read data")
+			return
+		}
 
 		command, err := parseBuffer(buf)
 
@@ -80,19 +92,32 @@ func handleConnection(conn net.Conn) {
 				response = formatResponse(command.Args[0])
 			}
 		case SET:
-			if len(command.Args) != 2 {
+			if len(command.Args) < 2 {
 				response = "-ERR wrong number of arguments for 'set' command\r\n"
 			} else {
-				redisData[command.Args[0]] = command.Args[1]
+				var ttl int64 = -1
+
+				if len(command.Args) == 4 && strings.ToUpper(command.Args[2]) == "EX" {
+					exMillis, _ := strconv.Atoi(command.Args[3])
+					ttl = time.Now().UnixMilli() + int64(exMillis)
+
+				}
+
+				db[command.Args[0]] = RedisData{
+					Key:   command.Args[0],
+					Value: command.Args[1],
+					Ttl:   ttl,
+				}
+
 				response = "+OK\r\n"
 			}
 		case GET:
 			if len(command.Args) != 1 {
 				response = "-ERR wrong number of arguments for 'get' command\r\n"
 			} else {
-				value, ok := redisData[command.Args[0]]
-				if ok {
-					response = formatResponse(value)
+				entry, ok := db[command.Args[0]]
+				if ok && (entry.Ttl == -1 || entry.Ttl > time.Now().UnixMilli()) {
+					response = formatResponse(entry.Value)
 				} else {
 					response = "$-1\r\n"
 				}
