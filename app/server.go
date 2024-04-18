@@ -116,7 +116,6 @@ func handleConnection(conn net.Conn) {
 			} else {
 				entry, ok := db[command.Args[0]]
 				if ok && (entry.Ttl == -1 || entry.Ttl > time.Now().UnixMilli()) {
-					fmt.Println(entry.Ttl, time.Now().UnixMilli(), "+++++++++++")
 					response = formatResponse(entry.Value)
 				} else {
 					response = "$-1\r\n"
